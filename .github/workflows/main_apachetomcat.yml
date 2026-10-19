@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
+    defaults:
+      run:
+        working-directory: ProBack   # el pom.xml está en ProBack/
 
     steps:
       - uses: actions/checkout@v4
@@ -23,19 +26,20 @@ jobs:
         with:
           java-version: '21'
           distribution: 'microsoft'
+          cache: maven
 
       - name: Build with Maven
-        run: mvn clean install
+        run: mvn -B clean install   # las pruebas usan H2, no necesitan la BD
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: java-app
-          path: '${{ github.workspace }}/target/*.war'
+          path: '${{ github.workspace }}/ProBack/target/*.war'
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build 
+    needs: build
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
@@ -45,13 +49,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: java-app
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_746C625704D84827B55E949C05946E8A }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_4F6E1298E8894ECF88636FF0225874E3 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_6E6E708E5B7143AAA7928AB1C65033DE }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
@@ -60,4 +64,3 @@ jobs:
           app-name: 'apacheTomcat'
           slot-name: 'Production'
           package: '*.war'
-          
