@@ -19,6 +19,18 @@ administrador `app.admin.username` / `app.admin.password`.
 
 Pruebas (H2 en memoria, no tocan MySQL): `./mvnw test`
 
+## Despliegue (Azure App Service)
+
+- **URL:** https://tomcat.sergio.games (Swagger en `/swagger-ui/index.html`, API en `/api`).
+- **Pila:** Azure App Service Linux, Java 21 y Tomcat 10.1; el WAR se publica como `app.war` en la raíz.
+- **CI/CD:** `.github/workflows/main_apachetomcat.yml` compila `ProBack/` con Maven (pruebas sobre H2)
+  y despliega en cada push a `main`. Usa OIDC con los secretos `AZUREAPPSERVICE_*` del repositorio.
+- **Configuración:** perfil `prod` (`application-prod.properties`, sin secretos). En Azure, en
+  Variables de entorno, se definen `SPRING_PROFILES_ACTIVE=prod`, `DB_URL`, `DB_USERNAME`,
+  `DB_PASSWORD` y `JWT_SECRET`; opcionales `ADMIN_PASSWORD` y `CORS_ALLOWED_ORIGINS`.
+- **Base de datos:** MySQL 8.4 externo; su firewall debe aceptar las IP de salida de la Web App.
+- **Cliente:** https://horarios.sergio.games (Cloudflare) consume esta API; CORS lo admite por defecto.
+
 ## Contrato
 
 Todos los endpoints salvo el login exigen `Authorization: Bearer <token>`.
