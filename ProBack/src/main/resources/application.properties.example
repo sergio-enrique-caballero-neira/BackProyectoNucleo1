@@ -1,0 +1,21 @@
+# Copia este archivo como application.properties y completa los valores.
+# application.properties esta en .gitignore: nunca subas credenciales al repositorio.
+spring.application.name=back
+spring.datasource.url=jdbc:mysql://HOST:PUERTO/proyecto_pn1
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.open-in-view=false
+spring.jackson.time-zone=America/Bogota
+
+springdoc.swagger-ui.path=/
+
+# Secreto en Base64 de al menos 256 bits (ej.: openssl rand -base64 48)
+jwt.secret=${JWT_SECRET}
+jwt.expiration-ms=${JWT_EXPIRATION_MS:28800000}
+
+app.admin.username=${ADMIN_USERNAME:admin}
+app.admin.password=${ADMIN_PASSWORD}
+
+app.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:http://localhost:4200,https://horarios.sergio.games}
