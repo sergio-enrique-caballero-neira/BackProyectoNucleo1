@@ -35,7 +35,9 @@ import proyectonucleo.back.entity.Usuario;
 
 /**
  * Reglas de acceso (RNF-04): sin sesión de servidor, todo {@code /api/**} exige un JWT válido
- * de un administrador, excepto el inicio de sesión. La documentación Swagger es pública.
+ * de un administrador, excepto el inicio de sesión. En desarrollo la documentación Swagger es
+ * pública; en producción está desactivada y la API solo acepta peticiones del cliente web
+ * ({@code app.security.require-origin=true}).
  */
 @Configuration
 @EnableWebSecurity
@@ -46,14 +48,24 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 	private final ObjectMapper objectMapper;
+	private final List<String> origenes;
+	private final boolean exigirOrigen;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper) {
+	public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper,
+			@Value("${app.cors.allowed-origins}") List<String> origenes,
+			@Value("${app.security.require-origin:false}") boolean exigirOrigen) {
 		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
 		this.objectMapper = objectMapper;
+		this.origenes = origenes.stream().map(String::trim).toList();
+		this.exigirOrigen = exigirOrigen;
 	}
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+		if (exigirOrigen) {
+			http.addFilterBefore(new OrigenPermitidoFilter(origenes, objectMapper),
+					UsernamePasswordAuthenticationFilter.class);
+		}
 		http.csrf(AbstractHttpConfigurer::disable)
 				.cors(Customizer.withDefaults())
 				.httpBasic(AbstractHttpConfigurer::disable)
@@ -97,10 +109,9 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	public CorsConfigurationSource corsConfigurationSource(
-			@Value("${app.cors.allowed-origins}") List<String> origenes) {
+	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration config = new CorsConfiguration();
-		config.setAllowedOrigins(origenes.stream().map(String::trim).toList());
+		config.setAllowedOrigins(origenes);
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 		config.setExposedHeaders(List.of("Location"));
