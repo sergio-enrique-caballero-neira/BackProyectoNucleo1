@@ -2,6 +2,7 @@ package proyectonucleo.back.service;
 
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
@@ -32,28 +33,50 @@ public class ReglasHorarioValidator {
 	 * @throws BadRequestException con el campo y la regla incumplida
 	 */
 	public void validarBloque(DiaSemana dia, LocalTime inicio, LocalTime fin) {
+		Optional<BadRequestException> incumplimiento = incumplimiento(dia, inicio, fin);
+		if (incumplimiento.isPresent()) {
+			throw incumplimiento.get();
+		}
+	}
+
+	/**
+	 * Indica si el bloque cumple todas las reglas horarias.
+	 *
+	 * @param dia    día del bloque
+	 * @param inicio hora de inicio
+	 * @param fin    hora de fin
+	 * @return {@code true} si el bloque es válido
+	 */
+	public boolean esValido(DiaSemana dia, LocalTime inicio, LocalTime fin) {
+		return incumplimiento(dia, inicio, fin).isEmpty();
+	}
+
+	private Optional<BadRequestException> incumplimiento(DiaSemana dia, LocalTime inicio, LocalTime fin) {
 		if (!fin.isAfter(inicio)) {
-			throw new BadRequestException("horaFin", "La hora de fin debe ser posterior a la hora de inicio.");
+			return error("horaFin", "La hora de fin debe ser posterior a la hora de inicio.");
 		}
 		if (!Duration.between(inicio, fin).equals(DURACION_SESION)) {
-			throw new BadRequestException("horaFin", "La sesión debe durar exactamente 2 horas; de "
-					+ inicio + " a " + fin + " no cumple.");
+			return error("horaFin", "La sesión debe durar exactamente 2 horas; de " + inicio + " a " + fin
+					+ " no cumple.");
 		}
 		if (inicio.isBefore(INICIO_JORNADA)) {
-			throw new BadRequestException("horaInicio", "La jornada inicia a las " + INICIO_JORNADA + ".");
+			return error("horaInicio", "La jornada inicia a las " + INICIO_JORNADA + ".");
 		}
 		if (dia == DiaSemana.SABADO && fin.isAfter(FIN_JORNADA_SABADO)) {
-			throw new BadRequestException("horaFin",
-					"El sábado solo admite sesiones hasta las " + FIN_JORNADA_SABADO + ".");
+			return error("horaFin", "El sábado solo admite sesiones hasta las " + FIN_JORNADA_SABADO + ".");
 		}
 		if (fin.isAfter(FIN_JORNADA_SEMANA)) {
-			throw new BadRequestException("horaFin",
-					"La jornada de lunes a viernes termina a las " + FIN_JORNADA_SEMANA + ".");
+			return error("horaFin", "La jornada de lunes a viernes termina a las " + FIN_JORNADA_SEMANA + ".");
 		}
 		if (inicio.isBefore(FIN_ALMUERZO) && fin.isAfter(INICIO_ALMUERZO)) {
-			throw new BadRequestException("horaInicio", "La sesión de " + inicio + " a " + fin
-					+ " invade el descanso de " + INICIO_ALMUERZO + " a " + FIN_ALMUERZO + ".");
+			return error("horaInicio", "La sesión de " + inicio + " a " + fin + " invade el descanso de "
+					+ INICIO_ALMUERZO + " a " + FIN_ALMUERZO + ".");
 		}
+		return Optional.empty();
+	}
+
+	private static Optional<BadRequestException> error(String campo, String mensaje) {
+		return Optional.of(new BadRequestException(campo, mensaje));
 	}
 
 	/**

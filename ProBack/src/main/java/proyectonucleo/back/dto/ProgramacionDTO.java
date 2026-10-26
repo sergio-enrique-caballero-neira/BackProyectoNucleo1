@@ -5,11 +5,13 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * Datos de una programación semanal ("Horario" en la interfaz). {@code bloques} solo se
- * devuelve en las respuestas; los bloques se crean y modifican en {@code /api/horarios}.
+ * Datos de una programación semanal ("Horario" en la interfaz). {@code programaCodigo},
+ * {@code programaNombre} y {@code bloques} solo se devuelven en las respuestas; los bloques se
+ * crean y modifican en {@code /api/horarios} o con la generación automática.
  */
 public class ProgramacionDTO {
 
@@ -18,13 +20,22 @@ public class ProgramacionDTO {
 
 	@NotBlank(message = "El código es obligatorio.")
 	@Size(max = 30, message = "El código admite máximo 30 caracteres.")
-	@Schema(example = "HIS-2026-1")
+	@Schema(example = "SIS-2026-2-S3")
 	private String codigo;
 
-	@NotBlank(message = "La carrera es obligatoria.")
-	@Size(max = 120, message = "La carrera admite máximo 120 caracteres.")
-	@Schema(example = "Ingeniería de Sistemas")
-	private String carrera;
+	@NotNull(message = "El programa es obligatorio.")
+	@Schema(example = "1")
+	private Long programaId;
+
+	@Schema(accessMode = Schema.AccessMode.READ_ONLY, example = "SIS")
+	private String programaCodigo;
+
+	@Schema(accessMode = Schema.AccessMode.READ_ONLY, example = "Ingeniería de Sistemas")
+	private String programaNombre;
+
+	@Size(max = 120, message = "La descripción admite máximo 120 caracteres.")
+	@Schema(example = "Semestre 3, grupo A")
+	private String descripcion;
 
 	@Schema(accessMode = Schema.AccessMode.READ_ONLY)
 	private List<HorarioDTO> bloques = new ArrayList<>();
@@ -32,9 +43,10 @@ public class ProgramacionDTO {
 	public ProgramacionDTO() {
 	}
 
-	public ProgramacionDTO(String codigo, String carrera) {
+	public ProgramacionDTO(String codigo, Long programaId, String descripcion) {
 		this.codigo = codigo;
-		this.carrera = carrera;
+		this.programaId = programaId;
+		this.descripcion = descripcion;
 	}
 
 	public Long getId() {
@@ -53,12 +65,36 @@ public class ProgramacionDTO {
 		this.codigo = codigo;
 	}
 
-	public String getCarrera() {
-		return carrera;
+	public Long getProgramaId() {
+		return programaId;
 	}
 
-	public void setCarrera(String carrera) {
-		this.carrera = carrera;
+	public void setProgramaId(Long programaId) {
+		this.programaId = programaId;
+	}
+
+	public String getProgramaCodigo() {
+		return programaCodigo;
+	}
+
+	public void setProgramaCodigo(String programaCodigo) {
+		this.programaCodigo = programaCodigo;
+	}
+
+	public String getProgramaNombre() {
+		return programaNombre;
+	}
+
+	public void setProgramaNombre(String programaNombre) {
+		this.programaNombre = programaNombre;
+	}
+
+	public String getDescripcion() {
+		return descripcion;
+	}
+
+	public void setDescripcion(String descripcion) {
+		this.descripcion = descripcion;
 	}
 
 	public List<HorarioDTO> getBloques() {

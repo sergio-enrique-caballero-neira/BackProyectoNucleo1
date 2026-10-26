@@ -4,13 +4,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import proyectonucleo.back.dto.HorarioDTO;
 import proyectonucleo.back.dto.ProgramacionDTO;
 import proyectonucleo.back.entity.Horario;
+import proyectonucleo.back.entity.Programa;
 import proyectonucleo.back.entity.Programacion;
 import proyectonucleo.back.exception.ConflictException;
 import proyectonucleo.back.exception.ResourceNotFoundException;
@@ -19,20 +19,20 @@ import proyectonucleo.back.repository.ProgramacionRepository;
 
 /**
  * Lógica de negocio de las programaciones semanales ("Horarios" en la interfaz), que
- * agrupan los bloques horarios de varias asignaturas.
+ * agrupan los bloques horarios de varias asignaturas de un programa.
  */
 @Service
 public class ProgramacionService implements CRUDoperation<ProgramacionDTO> {
 
 	private final ProgramacionRepository programacionRepository;
 	private final HorarioRepository horarioRepository;
-	private final ModelMapper modelMapper;
+	private final ProgramaService programaService;
 
 	public ProgramacionService(ProgramacionRepository programacionRepository, HorarioRepository horarioRepository,
-			ModelMapper modelMapper) {
+			ProgramaService programaService) {
 		this.programacionRepository = programacionRepository;
 		this.horarioRepository = horarioRepository;
-		this.modelMapper = modelMapper;
+		this.programaService = programaService;
 	}
 
 	/** El código se guarda sin espacios y en mayúsculas; no puede repetirse. */
@@ -43,8 +43,8 @@ public class ProgramacionService implements CRUDoperation<ProgramacionDTO> {
 		if (programacionRepository.existsByCodigoIgnoreCase(data.getCodigo())) {
 			throw codigoDuplicado(data.getCodigo());
 		}
-		Programacion entidad = modelMapper.map(data, Programacion.class);
-		entidad.setId(null);
+		Programa programa = programaService.buscar(data.getProgramaId());
+		Programacion entidad = new Programacion(data.getCodigo(), programa, data.getDescripcion());
 		return toDto(programacionRepository.save(entidad), List.of());
 	}
 
@@ -74,7 +74,8 @@ public class ProgramacionService implements CRUDoperation<ProgramacionDTO> {
 			throw codigoDuplicado(data.getCodigo());
 		}
 		entidad.setCodigo(data.getCodigo());
-		entidad.setCarrera(data.getCarrera());
+		entidad.setPrograma(programaService.buscar(data.getProgramaId()));
+		entidad.setDescripcion(data.getDescripcion());
 		return toDto(programacionRepository.save(entidad), horarioRepository.findByProgramacionId(id));
 	}
 
@@ -87,23 +88,28 @@ public class ProgramacionService implements CRUDoperation<ProgramacionDTO> {
 		programacionRepository.delete(entidad);
 	}
 
-	private Programacion buscar(Long id) {
+	Programacion buscar(Long id) {
 		return programacionRepository.findById(id)
 				.orElseThrow(() -> new ResourceNotFoundException("El horario con id " + id + " no existe."));
 	}
 
+	/** La descripción vacía se guarda como {@code null}. */
 	private void normalizar(ProgramacionDTO data) {
 		data.setCodigo(data.getCodigo().trim().toUpperCase());
-		data.setCarrera(data.getCarrera().trim());
+		String descripcion = data.getDescripcion() == null ? "" : data.getDescripcion().trim();
+		data.setDescripcion(descripcion.isEmpty() ? null : descripcion);
 	}
 
 	private ConflictException codigoDuplicado(String codigo) {
 		return new ConflictException("codigo", "Ya existe un horario con el código " + codigo + ".");
 	}
 
-	private ProgramacionDTO toDto(Programacion entidad, List<Horario> bloques) {
-		ProgramacionDTO dto = new ProgramacionDTO(entidad.getCodigo(), entidad.getCarrera());
+	ProgramacionDTO toDto(Programacion entidad, List<Horario> bloques) {
+		Programa programa = entidad.getPrograma();
+		ProgramacionDTO dto = new ProgramacionDTO(entidad.getCodigo(), programa.getId(), entidad.getDescripcion());
 		dto.setId(entidad.getId());
+		dto.setProgramaCodigo(programa.getCodigo());
+		dto.setProgramaNombre(programa.getNombre());
 		List<HorarioDTO> ordenados = bloques.stream().sorted(HorarioService.ORDEN).map(HorarioService::toDto)
 				.toList();
 		dto.setBloques(ordenados);

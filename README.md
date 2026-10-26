@@ -1,7 +1,8 @@
 # Back — API Gestor de Horarios
 
-API REST (Spring Boot 3.3.5, Java 21, MySQL, JWT) para la gestión de asignaturas y bloques horarios,
-según el *Informe 1 Proyecto Núcleo* (RF-01 a RF-08, RNF-01 a RNF-04, R-01 a R-03).
+API REST (Spring Boot 3.3.5, Java 21, MySQL, JWT) para la gestión de programas, asignaturas,
+horarios y bloques, con generación automática de horarios, según el *Informe de Avance Proyecto
+Núcleo 1* (RF-01 a RF-12, RNF-01 a RNF-04, R-01 a R-03).
 
 ## Ejecutar
 
@@ -13,23 +14,24 @@ según el *Informe 1 Proyecto Núcleo* (RF-01 a RF-08, RNF-01 a RNF-04, R-01 a R
 ./mvnw spring-boot:run
 ```
 
-Swagger queda en `http://localhost:8080/`. CORS admite `http://localhost:4200` y
-`https://horarios.sergio.games` (variable `CORS_ALLOWED_ORIGINS`). Al arrancar con la tabla `usuario` vacía se crea el
+Swagger queda en `http://localhost:8080/` (solo en desarrollo). CORS admite los orígenes de
+`app.cors.allowed-origins`. Al arrancar con la tabla `usuario` vacía se crea el
 administrador `app.admin.username` / `app.admin.password`.
 
 Pruebas (H2 en memoria, no tocan MySQL): `./mvnw test`
 
 ## Despliegue (Azure App Service)
 
-- **URL:** https://tomcat.sergio.games (Swagger en `/swagger-ui/index.html`, API en `/api`).
+- **URL:** https://tomcat.sergio.games (API en `/api`; Swagger desactivado en producción).
 - **Pila:** Azure App Service Linux, Java 21 y Tomcat 10.1; el WAR se publica como `app.war` en la raíz.
 - **CI/CD:** `.github/workflows/main_apachetomcat.yml` compila `ProBack/` con Maven (pruebas sobre H2)
   y despliega en cada push a `main`. Usa OIDC con los secretos `AZUREAPPSERVICE_*` del repositorio.
 - **Configuración:** perfil `prod` (`application-prod.properties`, sin secretos). En Azure, en
   Variables de entorno, se definen `SPRING_PROFILES_ACTIVE=prod`, `DB_URL`, `DB_USERNAME`,
-  `DB_PASSWORD` y `JWT_SECRET`; opcionales `ADMIN_PASSWORD` y `CORS_ALLOWED_ORIGINS`.
+  `DB_PASSWORD` y `JWT_SECRET`; opcional `ADMIN_PASSWORD`.
 - **Base de datos:** MySQL 8.4 externo; su firewall debe aceptar las IP de salida de la Web App.
-- **Cliente:** https://horarios.sergio.games (Cloudflare) consume esta API; CORS lo admite por defecto.
+- **Cliente:** https://horarios.sergio.games (Cloudflare) es el único origen aceptado: en producción
+  la API responde 403 a cualquier otra petición (`OrigenPermitidoFilter`).
 
 ## Contrato
 
@@ -38,6 +40,11 @@ Todos los endpoints salvo el login exigen `Authorization: Bearer <token>`.
 | Método | Ruta | Respuesta |
 |---|---|---|
 | POST | `/api/auth/login` | 200 `{token, tipo, expiraEn, username, rol}` · 401 |
+| GET | `/api/programas` | 200 programas con su número de asignaturas y horarios |
+| GET | `/api/programas/{id}` | 200 · 404 |
+| POST | `/api/programas` | 201 · 400 · 409 código o nombre duplicado |
+| PUT | `/api/programas/{id}` | 200 · 400 · 404 · 409 |
+| DELETE | `/api/programas/{id}` | 204 · 404 · 409 si tiene horarios |
 | GET | `/api/asignaturas` | 200 lista ordenada por código |
 | GET | `/api/asignaturas/{id}` | 200 · 404 |
 | POST | `/api/asignaturas` | 201 · 400 · 409 código duplicado |
@@ -48,19 +55,28 @@ Todos los endpoints salvo el login exigen `Authorization: Bearer <token>`.
 | POST | `/api/programaciones` | 201 · 400 · 409 código duplicado |
 | PUT | `/api/programaciones/{id}` | 200 · 400 · 404 · 409 |
 | DELETE | `/api/programaciones/{id}` | 204 (borra también sus bloques) · 404 |
+| POST | `/api/programaciones/{id}/propuesta` | 200 propuesta sin guardar · 400 · 404 |
+| POST | `/api/programaciones/{id}/propuesta/aplicar` | 200 horario con sus bloques · 400 · 404 · 409 (no guarda nada si un bloque falla) |
 | GET | `/api/horarios?programacionId=&asignaturaId=` | 200 bloques ordenados por día y hora |
 | GET | `/api/horarios/{id}` | 200 · 404 |
 | POST | `/api/horarios` | 201 · 400 regla horaria · 404 programación/asignatura · 409 |
 | PUT | `/api/horarios/{id}` | 200 · 400 · 404 · 409 |
 | DELETE | `/api/horarios/{id}` | 204 · 404 |
 
-Asignatura: `{ "codigo": "SIS101", "nombre": "Programación I", "creditos": 4, "sesionesSemana": 3 }`
+Programa: `{ "codigo": "SIS", "nombre": "Ingeniería de Sistemas" }` (la respuesta añade `id`,
+`asignaturas` y `horarios`).
 
-Programación ("Horario" en la interfaz): `{ "codigo": "HIS-2026-1", "carrera": "Ingeniería de Sistemas" }`
-(la respuesta añade `id` y `bloques`).
+Asignatura: `{ "codigo": "SIS101", "nombre": "Programación I", "creditos": 4, "sesionesSemana": 3, "programaIds": [1, 2] }`
+
+Programación ("Horario" en la interfaz): `{ "codigo": "SIS-2026-2-S3", "programaId": 1, "descripcion": "Semestre 3" }`
+(`descripcion` es opcional; la respuesta añade `id`, `programaCodigo`, `programaNombre` y `bloques`).
 
 Horario (bloque): `{ "programacionId": 1, "asignaturaId": 1, "diaSemana": "Lunes", "horaInicio": "07:00", "horaFin": "09:00" }`
 (la respuesta añade `id`, `asignaturaCodigo` y `asignaturaNombre`).
+
+Propuesta: se pide con `{ "asignaturaIds": [1, 2], "reorganizar": false, "semilla": 42 }` (`semilla`
+opcional; repetirla repite la propuesta) y responde `{ semilla, reorganizar, bloques, sinUbicar }`. Para
+guardarla se envía `{ "reorganizar": false, "bloques": [ { "asignaturaId", "diaSemana", "horaInicio", "horaFin" } ] }`.
 
 Errores: `{ fecha, estado, error, mensaje, ruta, campos? }`, donde `campos` relaciona cada campo
 con su mensaje para mostrarlo junto al campo en el formulario.
@@ -72,4 +88,8 @@ con su mensaje para mostrarlo junto al campo en el formulario.
 - Dentro de una programación, una asignatura no puede tener más bloques que sus sesiones
   semanales y ningún bloque puede cruzarse con otro, sea de la asignatura que sea. Programaciones
   distintas son independientes.
-- No se elimina una asignatura con bloques asociados.
+- No se elimina una asignatura con bloques asociados ni un programa con horarios.
+- Generación automática: nunca incumple las reglas anteriores; prefiere sesiones de una asignatura
+  en días distintos y a la misma hora, reparte la carga entre los días y solo usa el sábado o la
+  franja de 19:00 a 21:00 cuando no queda otro espacio. Con `reorganizar: false` conserva los
+  bloques actuales y completa las sesiones que faltan.

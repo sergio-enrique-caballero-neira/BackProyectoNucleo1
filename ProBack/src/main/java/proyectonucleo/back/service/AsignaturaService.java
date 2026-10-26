@@ -1,17 +1,21 @@
 package proyectonucleo.back.service;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import proyectonucleo.back.dto.AsignaturaDTO;
 import proyectonucleo.back.entity.Asignatura;
+import proyectonucleo.back.entity.Programa;
 import proyectonucleo.back.exception.ConflictException;
 import proyectonucleo.back.exception.ResourceNotFoundException;
 import proyectonucleo.back.repository.AsignaturaRepository;
 import proyectonucleo.back.repository.HorarioRepository;
+import proyectonucleo.back.repository.ProgramaRepository;
 
 /**
  * Lógica de negocio de asignaturas (RF-01 a RF-04).
@@ -21,13 +25,13 @@ public class AsignaturaService implements CRUDoperation<AsignaturaDTO> {
 
 	private final AsignaturaRepository asignaturaRepository;
 	private final HorarioRepository horarioRepository;
-	private final ModelMapper modelMapper;
+	private final ProgramaRepository programaRepository;
 
 	public AsignaturaService(AsignaturaRepository asignaturaRepository, HorarioRepository horarioRepository,
-			ModelMapper modelMapper) {
+			ProgramaRepository programaRepository) {
 		this.asignaturaRepository = asignaturaRepository;
 		this.horarioRepository = horarioRepository;
-		this.modelMapper = modelMapper;
+		this.programaRepository = programaRepository;
 	}
 
 	/** RF-01. El código se guarda sin espacios y en mayúsculas; no puede repetirse (RV-02). */
@@ -38,8 +42,9 @@ public class AsignaturaService implements CRUDoperation<AsignaturaDTO> {
 		if (asignaturaRepository.existsByCodigoIgnoreCase(data.getCodigo())) {
 			throw codigoDuplicado(data.getCodigo());
 		}
-		Asignatura entidad = modelMapper.map(data, Asignatura.class);
-		entidad.setId(null);
+		Asignatura entidad = new Asignatura(data.getCodigo(), data.getNombre(), data.getCreditos(),
+				data.getSesionesSemana());
+		entidad.setProgramas(resolverProgramas(data.getProgramaIds()));
 		return toDto(asignaturaRepository.save(entidad));
 	}
 
@@ -47,7 +52,7 @@ public class AsignaturaService implements CRUDoperation<AsignaturaDTO> {
 	@Override
 	@Transactional(readOnly = true)
 	public List<AsignaturaDTO> getAll() {
-		return asignaturaRepository.findAllByOrderByCodigoAsc().stream().map(this::toDto).toList();
+		return asignaturaRepository.findAllByOrderByCodigoAsc().stream().map(AsignaturaService::toDto).toList();
 	}
 
 	@Override
@@ -74,8 +79,11 @@ public class AsignaturaService implements CRUDoperation<AsignaturaDTO> {
 					+ " bloques en un mismo horario; elimine bloques antes de reducir las sesiones a "
 					+ data.getSesionesSemana() + ".");
 		}
-		modelMapper.map(data, entidad);
-		entidad.setId(id);
+		entidad.setCodigo(data.getCodigo());
+		entidad.setNombre(data.getNombre());
+		entidad.setCreditos(data.getCreditos());
+		entidad.setSesionesSemana(data.getSesionesSemana());
+		entidad.setProgramas(resolverProgramas(data.getProgramaIds()));
 		return toDto(asignaturaRepository.save(entidad));
 	}
 
@@ -98,6 +106,20 @@ public class AsignaturaService implements CRUDoperation<AsignaturaDTO> {
 				.orElseThrow(() -> new ResourceNotFoundException("La asignatura con id " + id + " no existe."));
 	}
 
+	private Set<Programa> resolverProgramas(List<Long> ids) {
+		if (ids == null || ids.isEmpty()) {
+			return new HashSet<>();
+		}
+		Set<Long> buscados = new HashSet<>(ids);
+		Set<Programa> programas = new HashSet<>(programaRepository.findAllById(buscados));
+		if (programas.size() < buscados.size()) {
+			Set<Long> encontrados = programas.stream().map(Programa::getId).collect(Collectors.toSet());
+			Long faltante = buscados.stream().filter(id -> !encontrados.contains(id)).findFirst().orElseThrow();
+			throw new ResourceNotFoundException("El programa con id " + faltante + " no existe.");
+		}
+		return programas;
+	}
+
 	private void normalizar(AsignaturaDTO data) {
 		data.setCodigo(data.getCodigo().trim().toUpperCase());
 		data.setNombre(data.getNombre().trim());
@@ -107,7 +129,11 @@ public class AsignaturaService implements CRUDoperation<AsignaturaDTO> {
 		return new ConflictException("codigo", "Ya existe una asignatura con el código " + codigo + ".");
 	}
 
-	private AsignaturaDTO toDto(Asignatura entidad) {
-		return modelMapper.map(entidad, AsignaturaDTO.class);
+	static AsignaturaDTO toDto(Asignatura entidad) {
+		AsignaturaDTO dto = new AsignaturaDTO(entidad.getCodigo(), entidad.getNombre(), entidad.getCreditos(),
+				entidad.getSesionesSemana());
+		dto.setId(entidad.getId());
+		dto.setProgramaIds(entidad.getProgramas().stream().map(Programa::getId).sorted().toList());
+		return dto;
 	}
 }

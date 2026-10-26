@@ -47,7 +47,7 @@ public interface HorarioRepository extends JpaRepository<Horario, Long> {
 			+ " group by h.programacion.id order by count(h) desc")
 	List<Long> contarPorProgramacion(@Param("asignaturaId") Long asignaturaId);
 
-	@Modifying
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("delete from Horario h where h.programacion.id = :programacionId")
 	void eliminarPorProgramacion(@Param("programacionId") Long programacionId);
 }

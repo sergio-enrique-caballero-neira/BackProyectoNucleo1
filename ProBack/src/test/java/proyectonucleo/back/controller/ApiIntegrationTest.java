@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,8 @@ class ApiIntegrationTest {
 
 	private String token;
 
+	private long programa;
+
 	@BeforeEach
 	void iniciarSesion() throws Exception {
 		String respuesta = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
@@ -53,6 +56,7 @@ class ApiIntegrationTest {
 				.andExpect(jsonPath("$.rol").value("ADMIN"))
 				.andReturn().getResponse().getContentAsString();
 		token = json.readTree(respuesta).get("token").asText();
+		programa = crear("/api/programas", programaJson("SIS", "Ingeniería de Sistemas"));
 	}
 
 	// --- Autenticación ---------------------------------------------------------------
@@ -91,6 +95,52 @@ class ApiIntegrationTest {
 					.andExpect(status().isOk())
 					.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, origen));
 		}
+	}
+
+	// --- Programas -------------------------------------------------------------------
+
+	@Test
+	void crudDeProgramasConSusConteos() throws Exception {
+		long bio = crear("/api/programas", programaJson(" bio ", "Bioingeniería"));
+		long calculo = crear("/api/asignaturas", asignatura("MAT101", "Cálculo Diferencial", 4, 2, programa, bio));
+		crearProgramacion("BIO-2026-1", "Semestre 1");
+
+		autenticado(get("/api/programas")).andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(2)))
+				.andExpect(jsonPath("$[0].codigo").value("BIO"))
+				.andExpect(jsonPath("$[0].asignaturas").value(1))
+				.andExpect(jsonPath("$[0].horarios").value(0))
+				.andExpect(jsonPath("$[1].horarios").value(1));
+
+		autenticado(post("/api/programas").contentType(MediaType.APPLICATION_JSON)
+				.content(programaJson("BIO2", "bioingeniería")))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.campos.nombre").exists());
+		autenticado(put("/api/programas/" + bio).contentType(MediaType.APPLICATION_JSON)
+				.content(programaJson("sis", "Otro")))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.campos.codigo").exists());
+		autenticado(post("/api/programas").contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.campos.codigo").exists())
+				.andExpect(jsonPath("$.campos.nombre").exists());
+
+		autenticado(delete("/api/programas/" + programa)).andExpect(status().isConflict())
+				.andExpect(jsonPath("$.mensaje", containsString("1 horario")));
+
+		// La asignatura compartida sobrevive y solo deja de ofrecerse en Bioingeniería.
+		autenticado(delete("/api/programas/" + bio)).andExpect(status().isNoContent());
+		autenticado(get("/api/asignaturas/" + calculo)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.programaIds", hasSize(1)))
+				.andExpect(jsonPath("$.programaIds[0]").value(programa));
+	}
+
+	@Test
+	void asignaturaConProgramasInexistentesResponde404() throws Exception {
+		autenticado(post("/api/asignaturas").contentType(MediaType.APPLICATION_JSON)
+				.content(asignatura("MAT101", "Cálculo", 4, 2, programa, 999L)))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.mensaje").value("El programa con id 999 no existe."));
 	}
 
 	// --- Asignaturas -----------------------------------------------------------------
@@ -188,9 +238,11 @@ class ApiIntegrationTest {
 				.andExpect(jsonPath("$[0].bloques[0].diaSemana").value("Lunes"));
 
 		autenticado(put("/api/programaciones/" + id).contentType(MediaType.APPLICATION_JSON)
-				.content(programacion("HIS-2026-1", "Ingeniería Industrial")))
+				.content(programacion("HIS-2026-1", "Semestre 3")))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.carrera").value("Ingeniería Industrial"))
+				.andExpect(jsonPath("$.descripcion").value("Semestre 3"))
+				.andExpect(jsonPath("$.programaId").value(programa))
+				.andExpect(jsonPath("$.programaNombre").value("Ingeniería de Sistemas"))
 				.andExpect(jsonPath("$.bloques", hasSize(2)));
 
 		autenticado(post("/api/programaciones").contentType(MediaType.APPLICATION_JSON)
@@ -199,10 +251,13 @@ class ApiIntegrationTest {
 				.andExpect(jsonPath("$.campos.codigo").exists());
 
 		autenticado(post("/api/programaciones").contentType(MediaType.APPLICATION_JSON)
-				.content(programacion("", "")))
+				.content("{\"codigo\":\"\"}"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.campos.codigo").exists())
-				.andExpect(jsonPath("$.campos.carrera").exists());
+				.andExpect(jsonPath("$.campos.programaId").exists());
+
+		long sinDescripcion = crearProgramacion("HIS-2026-2", "  ");
+		autenticado(get("/api/programaciones/" + sinDescripcion)).andExpect(jsonPath("$.descripcion").doesNotExist());
 
 		autenticado(delete("/api/programaciones/" + id)).andExpect(status().isNoContent());
 		autenticado(get("/api/programaciones/" + id)).andExpect(status().isNotFound());
@@ -349,8 +404,8 @@ class ApiIntegrationTest {
 		return crear("/api/asignaturas", asignatura(codigo, nombre, creditos, sesiones));
 	}
 
-	private long crearProgramacion(String codigo, String carrera) throws Exception {
-		return crear("/api/programaciones", programacion(codigo, carrera));
+	private long crearProgramacion(String codigo, String descripcion) throws Exception {
+		return crear("/api/programaciones", programacion(codigo, descripcion));
 	}
 
 	private long crearHorario(long programacionId, long asignaturaId, String dia, String inicio, String fin)
@@ -366,13 +421,18 @@ class ApiIntegrationTest {
 		return json.readTree(respuesta).get("id").asLong();
 	}
 
-	private String asignatura(String codigo, String nombre, int creditos, int sesiones) throws Exception {
+	private String asignatura(String codigo, String nombre, int creditos, int sesiones, Long... programas)
+			throws Exception {
 		return json.writeValueAsString(Map.of("codigo", codigo, "nombre", nombre, "creditos", creditos,
-				"sesionesSemana", sesiones));
+				"sesionesSemana", sesiones, "programaIds", List.of(programas)));
 	}
 
-	private String programacion(String codigo, String carrera) throws Exception {
-		return json.writeValueAsString(Map.of("codigo", codigo, "carrera", carrera));
+	private String programacion(String codigo, String descripcion) throws Exception {
+		return json.writeValueAsString(Map.of("codigo", codigo, "programaId", programa, "descripcion", descripcion));
+	}
+
+	private String programaJson(String codigo, String nombre) throws Exception {
+		return json.writeValueAsString(Map.of("codigo", codigo, "nombre", nombre));
 	}
 
 	private String horario(long programacionId, long asignaturaId, String dia, String inicio, String fin)

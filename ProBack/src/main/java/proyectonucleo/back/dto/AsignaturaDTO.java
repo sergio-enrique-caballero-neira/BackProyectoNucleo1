@@ -1,5 +1,8 @@
 package proyectonucleo.back.dto;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -9,6 +12,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Datos de una asignatura que viajan entre la API y el cliente (RV-01, RV-07).
+ * {@code programaIds} lista los programas en los que se ofrece; puede estar vacía.
  */
 public class AsignaturaDTO {
 
@@ -36,6 +40,9 @@ public class AsignaturaDTO {
 	@Max(value = 4, message = "Las sesiones por semana deben estar entre 1 y 4.")
 	@Schema(example = "3")
 	private Integer sesionesSemana;
+
+	@Schema(example = "[1, 2]")
+	private List<Long> programaIds = new ArrayList<>();
 
 	public AsignaturaDTO() {
 	}
@@ -85,5 +92,13 @@ public class AsignaturaDTO {
 
 	public void setSesionesSemana(Integer sesionesSemana) {
 		this.sesionesSemana = sesionesSemana;
+	}
+
+	public List<Long> getProgramaIds() {
+		return programaIds;
+	}
+
+	public void setProgramaIds(List<Long> programaIds) {
+		this.programaIds = programaIds;
 	}
 }

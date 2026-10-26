@@ -16,12 +16,16 @@ import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import proyectonucleo.back.dto.AplicarPropuestaDTO;
 import proyectonucleo.back.dto.ProgramacionDTO;
+import proyectonucleo.back.dto.PropuestaDTO;
+import proyectonucleo.back.dto.SolicitudPropuestaDTO;
+import proyectonucleo.back.service.GeneradorHorarioService;
 import proyectonucleo.back.service.ProgramacionService;
 
 /**
  * Endpoints de las programaciones semanales ("Horarios" en la interfaz), que agrupan los
- * bloques horarios de varias asignaturas.
+ * bloques horarios de varias asignaturas, y de su generación automática.
  */
 @RestController
 @RequestMapping("/api/programaciones")
@@ -29,9 +33,12 @@ import proyectonucleo.back.service.ProgramacionService;
 public class ProgramacionController {
 
 	private final ProgramacionService programacionService;
+	private final GeneradorHorarioService generadorHorarioService;
 
-	public ProgramacionController(ProgramacionService programacionService) {
+	public ProgramacionController(ProgramacionService programacionService,
+			GeneradorHorarioService generadorHorarioService) {
 		this.programacionService = programacionService;
+		this.generadorHorarioService = generadorHorarioService;
 	}
 
 	@GetMapping
@@ -54,7 +61,7 @@ public class ProgramacionController {
 	}
 
 	@PutMapping("/{id}")
-	@Operation(summary = "Actualizar código y carrera de una programación")
+	@Operation(summary = "Actualizar código, programa y descripción de una programación")
 	public ProgramacionDTO actualizar(@PathVariable Long id, @Valid @RequestBody ProgramacionDTO data) {
 		return programacionService.updateById(id, data);
 	}
@@ -64,5 +71,17 @@ public class ProgramacionController {
 	public ResponseEntity<Void> eliminar(@PathVariable Long id) {
 		programacionService.deleteById(id);
 		return ResponseEntity.noContent().build();
+	}
+
+	@PostMapping("/{id}/propuesta")
+	@Operation(summary = "Generar una propuesta de horario sin guardarla")
+	public PropuestaDTO proponer(@PathVariable Long id, @Valid @RequestBody SolicitudPropuestaDTO solicitud) {
+		return generadorHorarioService.proponer(id, solicitud);
+	}
+
+	@PostMapping("/{id}/propuesta/aplicar")
+	@Operation(summary = "Guardar la propuesta aprobada en una sola transacción")
+	public ProgramacionDTO aplicar(@PathVariable Long id, @Valid @RequestBody AplicarPropuestaDTO aprobada) {
+		return generadorHorarioService.aplicar(id, aprobada);
 	}
 }
