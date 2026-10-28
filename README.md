@@ -22,7 +22,7 @@ Pruebas (H2 en memoria, no tocan MySQL): `./mvnw test`
 
 ## Despliegue (Azure App Service)
 
-- **URL:** https://tomcat.sergio.games (API en `/api`; Swagger desactivado en producción).
+- **URL:** https://tomca.serbux.qzz.io (API en `/api`; Swagger desactivado en producción).
 - **Pila:** Azure App Service Linux, Java 21 y Tomcat 10.1; el WAR se publica como `app.war` en la raíz.
 - **CI/CD:** `.github/workflows/main_apachetomcat.yml` compila `ProBack/` con Maven (pruebas sobre H2)
   y despliega en cada push a `main`. Usa OIDC con los secretos `AZUREAPPSERVICE_*` del repositorio.
@@ -30,7 +30,7 @@ Pruebas (H2 en memoria, no tocan MySQL): `./mvnw test`
   Variables de entorno, se definen `SPRING_PROFILES_ACTIVE=prod`, `DB_URL`, `DB_USERNAME`,
   `DB_PASSWORD` y `JWT_SECRET`; opcional `ADMIN_PASSWORD`.
 - **Base de datos:** MySQL 8.4 externo; su firewall debe aceptar las IP de salida de la Web App.
-- **Cliente:** https://horarios.sergio.games (Cloudflare) es el único origen aceptado: en producción
+- **Cliente:** https://horarios.sergio.games y https://horarios.serbux.qzz.io son los únicos orígenes aceptados: en producción
   la API responde 403 a cualquier otra petición (`OrigenPermitidoFilter`).
 
 ## Contrato

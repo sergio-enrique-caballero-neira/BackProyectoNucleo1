@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * documentación Swagger no está disponible.
  */
 @SpringBootTest(properties = {
-		"app.cors.allowed-origins=https://horarios.sergio.games",
+		"app.cors.allowed-origins=https://horarios.sergio.games,https://horarios.serbux.qzz.io",
 		"app.security.require-origin=true",
 		"springdoc.api-docs.enabled=false",
 		"springdoc.swagger-ui.enabled=false" })
@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class OrigenPermitidoIntegrationTest {
 
 	private static final String CLIENTE = "https://horarios.sergio.games";
+	private static final String CLIENTE_ALTERNO = "https://horarios.serbux.qzz.io";
 	private static final String LOGIN = "{\"username\":\"admin\",\"password\":\"admin-test-123\"}";
 
 	@Autowired
@@ -55,17 +56,19 @@ class OrigenPermitidoIntegrationTest {
 
 	@Test
 	void elClienteWebUsaLaApiConNormalidad() throws Exception {
-		mvc.perform(options("/api/asignaturas").header(HttpHeaders.ORIGIN, CLIENTE)
-				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
-				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
-				.andExpect(status().isOk())
-				.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CLIENTE));
-		mvc.perform(post("/api/auth/login").header(HttpHeaders.ORIGIN, CLIENTE)
-				.contentType(MediaType.APPLICATION_JSON).content(LOGIN))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.token").exists());
-		mvc.perform(get("/api/asignaturas").header(HttpHeaders.ORIGIN, CLIENTE))
-				.andExpect(status().isUnauthorized());
+		for (String origen : new String[] { CLIENTE, CLIENTE_ALTERNO }) {
+			mvc.perform(options("/api/asignaturas").header(HttpHeaders.ORIGIN, origen)
+					.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+					.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
+					.andExpect(status().isOk())
+					.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, origen));
+			mvc.perform(post("/api/auth/login").header(HttpHeaders.ORIGIN, origen)
+					.contentType(MediaType.APPLICATION_JSON).content(LOGIN))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.token").exists());
+			mvc.perform(get("/api/asignaturas").header(HttpHeaders.ORIGIN, origen))
+					.andExpect(status().isUnauthorized());
+		}
 	}
 
 	@Test
